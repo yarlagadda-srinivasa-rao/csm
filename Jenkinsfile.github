@@ -40,11 +40,11 @@ pipeline {
                             }
                         }
 
-                        stage('Containers') {
-                            steps {
-                                sh "./validate.sh validate_containers"
-                            }
-                        }
+                        //stage('Containers') {
+                        //   steps {
+                        //        sh "./validate.sh validate_containers"
+                        //    }
+                        //}
 
                         stage('Helm Versions') {
                             steps {
