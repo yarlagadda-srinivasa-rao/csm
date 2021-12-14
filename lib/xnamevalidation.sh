@@ -16,15 +16,11 @@ disable - disables xname validation on the OPA gateway
 "
 }
 
-# Alias for kubectl exec into containers
-alias execPostgres="kubectl exec -itn spire spire-postgres-0 --container postgres -- su postgres -c"
-alias execSpireServer="kubectl exec -itn spire spire-server-0 --container spire-server -- ./bin/spire-server"
-
 # get_tenants gets a list of tenants by querying the postgres server. This cannot
 # be done via the spire-server binary, as it will fail to return data once there
 # are a large number of entries.
 get_tenants() {
-	execPostgres -c "psql spire -c \"SELECT spiffe_id FROM registered_entries where spiffe_id LIKE '%tenant1%'\" -P "tuples_only" -P "pager 0"" | sort -u
+	kubectl exec -itn spire spire-postgres-0 --container postgres -- su postgres -c "psql spire -c \"SELECT spiffe_id FROM registered_entries where spiffe_id LIKE '%tenant1%'\" -P "tuples_only" -P "pager 0"" | sort -u
 }
 
 # get_tenants_by_type returns a tenant of a specific type, which can be more easily
@@ -46,9 +42,9 @@ add_xname_workload_entry() {
 	xname="${tenant##*/}"
 	# xname="$(echo $tenant | awk -F/ '{print $NF}')"
 
-	if ! execSpireServer entry show -spiffeID "spiffe://shasta/${type}/${xname}/workload/${workload}" | grep -q "spiffe://shasta/${type}/${xname}/workload/${workload}"; then
+	if ! kubectl exec -itn spire spire-server-0 --container spire-server -- ./bin/spire-server entry show -spiffeID "spiffe://shasta/${type}/${xname}/workload/${workload}" | grep -q "spiffe://shasta/${type}/${xname}/workload/${workload}"; then
 		if [ "$ttl" ]; then
-			execSpireServer entry create \
+			kubectl exec -itn spire spire-server-0 --container spire-server -- ./bin/spire-server entry create \
 				-parentID "$tenant" \
 				-spiffeID "spiffe://${TRUSTDOMAIN}/${type}/${xname}/workload/${workload}" \
 				-selector unix:uid:0 \
@@ -56,7 +52,7 @@ add_xname_workload_entry() {
 				-selector "unix:path:${agentPath}" \
 				-ttl "${ttl}" || echo "Entry creation failed: $*"
 		else
-			execSpireServer entry create \
+			kubectl exec -itn spire spire-server-0 --container spire-server -- ./bin/spire-server entry create \
 				-parentID "$tenant" \
 				-spiffeID "spiffe://${TRUSTDOMAIN}/${type}/${xname}/workload/${workload}" \
 				-selector unix:uid:0 \
@@ -76,9 +72,9 @@ add_regular_workload_entry() {
 	agentPath="$3"
 	ttl="$4"
 
-	if ! execSpireServer entry show -spiffeID "spiffe://shasta/${type}/workload/${workload}" | grep -q "spiffe://shasta/${type}/workload/${workload}"; then
+	if ! kubectl exec -itn spire spire-server-0 --container spire-server -- ./bin/spire-server entry show -spiffeID "spiffe://shasta/${type}/workload/${workload}" | grep -q "spiffe://shasta/${type}/workload/${workload}"; then
 		if [ "$ttl" ]; then
-			execSpireServer entry create \
+			kubectl exec -itn spire spire-server-0 --container spire-server -- ./bin/spire-server entry create \
 				-parentID "spiffe://shasta/$type" \
 				-spiffeID "spiffe://${TRUSTDOMAIN}/${type}/workload/${workload}" \
 				-selector unix:uid:0 \
@@ -86,7 +82,7 @@ add_regular_workload_entry() {
 				-selector "unix:path:${agentPath}" \
 				-ttl "${ttl}" || echo "Entry creation failed: $*"
 		else
-			execSpireServer entry create \
+			kubectl exec -itn spire spire-server-0 --container spire-server -- ./bin/spire-server entry create \
 				-parentID "spiffe://shasta/$type" \
 				-spiffeID "spiffe://${TRUSTDOMAIN}/${type}/workload/${workload}" \
 				-selector unix:uid:0 \
@@ -101,10 +97,10 @@ add_regular_workload_entry() {
 delete_workload_entry() {
 	spiffeID="$1"
 
-	if execSpireServer entry show -spiffeID "$spiffeID" | grep -q "Entry ID"; then
+	if kubectl exec -itn spire spire-server-0 --container spire-server -- ./bin/spire-server entry show -spiffeID "$spiffeID" | grep -q "Entry ID"; then
 		# For some reason, this command has a ^M at the end. the tr command strips this out.
-		for entryID in $(execSpireServer entry show -spiffeID "$spiffeID" | grep "Entry ID" | awk '{print $4}' | tr -d "\015"); do
-			execSpireServer entry delete -entryID "${entryID}"
+		for entryID in $(kubectl exec -itn spire spire-server-0 --container spire-server -- ./bin/spire-server entry show -spiffeID "$spiffeID" | grep "Entry ID" | awk '{print $4}' | tr -d "\015"); do
+			kubectl exec -itn spire spire-server-0 --container spire-server -- ./bin/spire-server entry delete -entryID "${entryID}"
 		done
 	fi
 }
@@ -114,12 +110,12 @@ delete_workload_entry() {
 delete_workloads_for_tenant() {
 	tenant="$1"
 
-	if execSpireServer entry show -parentID "$tenant" | grep -q "Entry ID"; then
+	if kubectl exec -itn spire spire-server-0 --container spire-server -- ./bin/spire-server entry show -parentID "$tenant" | grep -q "Entry ID"; then
 		# For some reason, this command has a ^M at the end. the tr command strips this out.
-		for entryID in $(execSpireServer entry show -parentID "$tenant" | grep "Entry ID" | awk '{print $4}' | tr -d "\015"); do
+		for entryID in $(kubectl exec -itn spire spire-server-0 --container spire-server -- ./bin/spire-server entry show -parentID "$tenant" | grep "Entry ID" | awk '{print $4}' | tr -d "\015"); do
 			# Only delete entries where the SPIFFE ID contains the string workload
-			if execSpireServer entry show -entryID "${entryID}" | grep "SPIFFE ID" | grep -q workload; then
-				execSpireServer entry delete -entryID "$entryID"
+			if kubectl exec -itn spire spire-server-0 --container spire-server -- ./bin/spire-server entry show -entryID "${entryID}" | grep "SPIFFE ID" | grep -q workload; then
+				kubectl exec -itn spire spire-server-0 --container spire-server -- ./bin/spire-server entry delete -entryID "$entryID"
 			fi
 		done
 	fi
@@ -129,10 +125,10 @@ delete_workloads_for_tenant() {
 delete_spiffeID() {
 	spiffeID="$1"
 
-	if execSpireServer entry show -spiffeID "$spiffeID" | grep -q "Entry ID"; then
+	if kubectl exec -itn spire spire-server-0 --container spire-server -- ./bin/spire-server entry show -spiffeID "$spiffeID" | grep -q "Entry ID"; then
 		# For some reason, this command has a ^M at the end. the tr command strips this out.
-		for entryID in $(execSpireServer entry show -spiffeID "$spiffeID" | grep "Entry ID" | awk '{print $4}' | tr -d "\015"); do
-			execSpireServer entry delete -entryID "$entryID"
+		for entryID in $(kubectl exec -itn spire spire-server-0 --container spire-server -- ./bin/spire-server entry show -spiffeID "$spiffeID" | grep "Entry ID" | awk '{print $4}' | tr -d "\015"); do
+			kubectl exec -itn spire spire-server-0 --container spire-server -- ./bin/spire-server entry delete -entryID "$entryID"
 		done
 	fi
 }
@@ -228,19 +224,19 @@ add_regular_workloads() {
 
 # delete_regular_workloads removes all the non-xname specific workloads from spire
 delete_regular_workloads() {
-	for computeWorkload in $(execPostgres -c "psql spire -c \"SELECT spiffe_id FROM registered_entries where spiffe_id LIKE '%compute/workload%'\" -P "tuples_only" -P "pager 0"" | tr -d "\015" | sort -u); do
+	for computeWorkload in $(kubectl exec -itn spire spire-postgres-0 --container postgres -- su postgres -c "psql spire -c \"SELECT spiffe_id FROM registered_entries where spiffe_id LIKE '%compute/workload%'\" -P "tuples_only" -P "pager 0"" | tr -d "\015" | sort -u); do
 		delete_workload_entry "$computeWorkload"
 	done
 
-	for ncnWorkload in $(execPostgres -c "psql spire -c \"SELECT spiffe_id FROM registered_entries where spiffe_id LIKE '%ncn/workload%'\" -P "tuples_only" -P "pager 0"" | tr -d "\015" | sort -u); do
+	for ncnWorkload in $(kubectl exec -itn spire spire-postgres-0 --container postgres -- su postgres -c "psql spire -c \"SELECT spiffe_id FROM registered_entries where spiffe_id LIKE '%ncn/workload%'\" -P "tuples_only" -P "pager 0"" | tr -d "\015" | sort -u); do
 		delete_workload_entry "$ncnWorkload"
 	done
 
-	for storageWorkload in $(execPostgres -c "psql spire -c \"SELECT spiffe_id FROM registered_entries where spiffe_id LIKE '%storage/workload%'\" -P "tuples_only" -P "pager 0"" | tr -d "\015" | sort -u); do
+	for storageWorkload in $(kubectl exec -itn spire spire-postgres-0 --container postgres -- su postgres -c "psql spire -c \"SELECT spiffe_id FROM registered_entries where spiffe_id LIKE '%storage/workload%'\" -P "tuples_only" -P "pager 0"" | tr -d "\015" | sort -u); do
 		delete_workload_entry "$storageWorkload"
 	done
 
-	for uanWorkload in $(execPostgres -c "psql spire -c \"SELECT spiffe_id FROM registered_entries where spiffe_id LIKE '%uan/workload%'\" -P "tuples_only" -P "pager 0"" | tr -d "\015" | sort -u); do
+	for uanWorkload in $(kubectl exec -itn spire spire-postgres-0 --container postgres -- su postgres -c "psql spire -c \"SELECT spiffe_id FROM registered_entries where spiffe_id LIKE '%uan/workload%'\" -P "tuples_only" -P "pager 0"" | tr -d "\015" | sort -u); do
 		delete_workload_entry "$uanWorkload"
 	done
 }
