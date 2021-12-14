@@ -1,5 +1,5 @@
 #!/bin/bash
-#set -euo pipefail
+set -euo pipefail
 
 TMPDIR=$(mktemp -d)
 TRUSTDOMAIN=$(kubectl get pod -n spire spire-server-0 -o json | jq -r '.spec.containers[].env[]| select(.name=="SPIRE_DOMAIN") | .value')
@@ -37,13 +37,13 @@ add_xname_workload_entry() {
 	type="$2"
 	workload="$3"
 	agentPath="$4"
-	ttl="$5"
 
 	xname="${tenant##*/}"
 	# xname="$(echo $tenant | awk -F/ '{print $NF}')"
 
 	if ! kubectl exec -itn spire spire-server-0 --container spire-server -- ./bin/spire-server entry show -spiffeID "spiffe://shasta/${type}/${xname}/workload/${workload}" | grep -q "spiffe://shasta/${type}/${xname}/workload/${workload}"; then
-		if [ "$ttl" ]; then
+		if [ "$#" -eq 5 ]; then
+			ttl="$5"
 			kubectl exec -itn spire spire-server-0 --container spire-server -- ./bin/spire-server entry create \
 				-parentID "$tenant" \
 				-spiffeID "spiffe://${TRUSTDOMAIN}/${type}/${xname}/workload/${workload}" \
@@ -70,10 +70,10 @@ add_regular_workload_entry() {
 	type="$1"
 	workload="$2"
 	agentPath="$3"
-	ttl="$4"
 
 	if ! kubectl exec -itn spire spire-server-0 --container spire-server -- ./bin/spire-server entry show -spiffeID "spiffe://shasta/${type}/workload/${workload}" | grep -q "spiffe://shasta/${type}/workload/${workload}"; then
-		if [ "$ttl" ]; then
+		if [ "$#" -eq 4 ]; then
+			ttl="$4"
 			kubectl exec -itn spire spire-server-0 --container spire-server -- ./bin/spire-server entry create \
 				-parentID "spiffe://shasta/$type" \
 				-spiffeID "spiffe://${TRUSTDOMAIN}/${type}/workload/${workload}" \
@@ -324,9 +324,9 @@ run_loftsman() {
 	loftsman ship --charts-path "${PWD}/helm" --manifest-path "${TMPDIR}/manifest.yaml"
 
 	# Restart opa pods so that the policy changes are picked up
-	helm rollout restart -n opa deployment cray-opa-ingressgateway
-	helm rollout restart -n opa deployment cray-opa-ingressgateway-customer-admin
-	helm rollout restart -n opa deployment cray-opa-ingressgateway-customer-user
+	kubectl rollout restart -n opa deployment cray-opa-ingressgateway
+	kubectl rollout restart -n opa deployment cray-opa-ingressgateway-customer-admin
+	kubectl rollout restart -n opa deployment cray-opa-ingressgateway-customer-user
 }
 
 # validate_prereqs makes sure everything is available for this script to work
@@ -383,6 +383,22 @@ validate_prereqs() {
 	fi
 }
 
+wait_for_spire() {
+	RETRY=0
+	MAX_RETRIES=30
+	RETRY_SECONDS=10
+	until kubectl get -n spire statefulset spire-server | grep -q '3/3'; do
+		if [[ $RETRY -lt $MAX_RETRIES ]]; then
+			RETRY="$((RETRY + 1))"
+			echo "spire-server is not ready. Will retry after $RETRY_SECONDS seconds. ($RETRY/$MAX_RETRIES)"
+		else
+			echo "spire-server did not start after $(echo "$RETRY_SECONDS" \* "$MAX_RETRIES" | bc) seconds."
+			exit 1
+		fi
+		sleep "$RETRY_SECONDS"
+	done
+}
+
 enable_xnameValidation() {
 	validate_prereqs
 	echo "Adding Workload Entries"
@@ -394,6 +410,7 @@ enable_xnameValidation() {
 	create_manifest
 	run_loftsman
 	update_customizations
+	wait_for_spire
 	echo "Removing old Workload Entries"
 	delete_regular_workloads
 }
@@ -409,6 +426,7 @@ disable_xnameValidation() {
 	create_manifest
 	run_loftsman
 	update_customizations
+	wait_for_spire
 	echo "Removing xname Workload Entries"
 	delete_xname_workloads
 }
