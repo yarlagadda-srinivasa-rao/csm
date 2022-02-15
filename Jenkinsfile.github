@@ -32,6 +32,7 @@ pipeline {
                 stage('Init') {
                     steps{
                         script {
+                            sh "git fetch --tags"
                             env.RELEASE_VERSION = sh(script: './version.sh', returnStdout: true).trim()
                             if ( isReleaseTag ) {
                                 slackSend(channel: env.SLACK_CHANNEL_NOTIFY, color: "#439fe0", message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - Build starting, see #${env.SLACK_CHANNEL_ALERTS} for details")
