@@ -1,5 +1,7 @@
 @Library('csm-shared-library') _
 
+def isReleaseTag = env.TAG_NAME ==~ "v.+"
+
 pipeline {
     agent {
         label "metal-gcp-builder"
@@ -19,7 +21,6 @@ pipeline {
         }
 
         stage('Release') {
-            when { tag "v*" }
 
             environment {
                 RELEASE_NAME = "csm"
@@ -32,8 +33,10 @@ pipeline {
                     steps{
                         script {
                             env.RELEASE_VERSION = sh(script: './version.sh', returnStdout: true).trim()
-                            slackSend(channel: env.SLACK_CHANNEL_NOTIFY, color: "#439fe0", message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - Build starting, see #${env.SLACK_CHANNEL_ALERTS} for details")
-                            slackSend(channel: env.SLACK_CHANNEL_ALERTS, color: "#439fe0", message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - Build starting")
+                            if ( isReleaseTag ) {
+                                slackSend(channel: env.SLACK_CHANNEL_NOTIFY, color: "#439fe0", message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - Build starting, see #${env.SLACK_CHANNEL_ALERTS} for details")
+                                slackSend(channel: env.SLACK_CHANNEL_ALERTS, color: "#439fe0", message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - Build starting")
+                            }
                         }
                     }
                 }
@@ -41,7 +44,9 @@ pipeline {
                 stage('Setup') {
                     steps {
                         script {
-                            slackSend(channel: env.SLACK_CHANNEL_ALERTS, message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - Setting up build environment")
+                            if ( isReleaseTag ) {
+                                slackSend(channel: env.SLACK_CHANNEL_ALERTS, message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - Setting up build environment")
+                            }
                             sh "rm -fr dist"
                             sh """
                                 rm -fr env3
@@ -55,12 +60,16 @@ pipeline {
                     post {
                         success {
                             script {
-                                slackSend(channel: env.SLACK_CHANNEL_ALERTS, color: "good", message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - :white_check_mark: Build environment configured")
+                                if ( isReleaseTag ) {
+                                    slackSend(channel: env.SLACK_CHANNEL_ALERTS, color: "good", message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - :white_check_mark: Build environment configured")
+                                }
                             }
                         }
                         unsuccessful {
                             script {
-                                slackSend(channel: env.SLACK_CHANNEL_ALERTS, color: "danger", message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - :x: Not able to setup build environment")
+                                if ( isReleaseTag ) {
+                                    slackSend(channel: env.SLACK_CHANNEL_ALERTS, color: "danger", message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - :x: Not able to setup build environment")
+                                }
                             }
                         }
                     }
@@ -73,7 +82,9 @@ pipeline {
                     }
                     steps {
                         script {
-                            slackSend(channel: env.SLACK_CHANNEL_ALERTS, message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - Running release.sh")
+                            if ( isReleaseTag ) {
+                                slackSend(channel: env.SLACK_CHANNEL_ALERTS, message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - Running release.sh")
+                            }
                             sh """
                                 . env3/bin/activate
                                 ./release.sh
@@ -83,18 +94,25 @@ pipeline {
                     post {
                         success {
                             script {
-                                slackSend(channel: env.SLACK_CHANNEL_ALERTS, color: "good", message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - :white_check_mark: Built release distribution")
+                                if ( isReleaseTag ) {
+                                    slackSend(channel: env.SLACK_CHANNEL_ALERTS, color: "good", message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - :white_check_mark: Built release distribution")
+                                }
                             }
                         }
                         unsuccessful {
                             script {
-                                slackSend(channel: env.SLACK_CHANNEL_ALERTS, color: "danger", message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - :x: release.sh did not exit successfully")
+                                if ( isReleaseTag ) {
+                                    slackSend(channel: env.SLACK_CHANNEL_ALERTS, color: "danger", message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - :x: release.sh did not exit successfully")
+                                }
                             }
                         }
                     }
                 }
 
                 stage('Publish') {
+                    when {
+                        expression { isReleaseTag }
+                    }
                     steps {
                         script {
                             slackSend(channel: env.SLACK_CHANNEL_ALERTS, message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - Publishing distributions")
@@ -132,18 +150,24 @@ pipeline {
             post {
                 success {
                     script {
-                        slackSend(channel: env.SLACK_CHANNEL_NOTIFY, color: "good", message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - :white_check_mark: Success!\n- Release distribution: <${env.RELEASE_URL}|${env.RELEASE_NAME}-${env.RELEASE_VERSION}.tar.gz>")
+                        if ( isReleaseTag ) {
+                            slackSend(channel: env.SLACK_CHANNEL_NOTIFY, color: "good", message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - :white_check_mark: Success!\n- Release distribution: <${env.RELEASE_URL}|${env.RELEASE_NAME}-${env.RELEASE_VERSION}.tar.gz>")
+                        }
                     }
                 }
                 failure {
                     script {
-                        slackSend(channel: env.SLACK_CHANNEL_NOTIFY, color: "danger", message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - :x: Build did not complete successfully")
+                        if ( isReleaseTag ) {
+                            slackSend(channel: env.SLACK_CHANNEL_NOTIFY, color: "danger", message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - :x: Build did not complete successfully")
+                        }
                     }
                 }
                 aborted {
                     script {
-                        slackSend(channel: env.SLACK_CHANNEL_ALERTS, color: "warning", message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - :warning: Job was aborted")
-                        slackSend(channel: env.SLACK_CHANNEL_NOTIFY, color: "warning", message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - :warning: Job was aborted")
+                        if ( isReleaseTag ) {
+                            slackSend(channel: env.SLACK_CHANNEL_ALERTS, color: "warning", message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - :warning: Job was aborted")
+                            slackSend(channel: env.SLACK_CHANNEL_NOTIFY, color: "warning", message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - :warning: Job was aborted")
+                        }
                     }
                 }
             }
