@@ -34,6 +34,7 @@ pipeline {
                         script {
                             sh "git fetch --tags"
                             env.RELEASE_VERSION = sh(script: './version.sh', returnStdout: true).trim()
+                            echo "Identified version as ${env.RELEASE_VERSION}"
                             if ( isReleaseTag ) {
                                 slackSend(channel: env.SLACK_CHANNEL_NOTIFY, color: "#439fe0", message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - Build starting, see #${env.SLACK_CHANNEL_ALERTS} for details")
                                 slackSend(channel: env.SLACK_CHANNEL_ALERTS, color: "#439fe0", message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - Build starting")
@@ -97,6 +98,8 @@ pipeline {
                             script {
                                 if ( isReleaseTag ) {
                                     slackSend(channel: env.SLACK_CHANNEL_ALERTS, color: "good", message: "<${env.BUILD_URL}|CSM ${env.RELEASE_VERSION}> - :white_check_mark: Built release distribution")
+                                } else {
+                                    archiveArtifacts artifacts: "dist/*.tar.gz"
                                 }
                             }
                         }
