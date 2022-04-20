@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
 ## Unreleased
+- Update UAS to 1.20.0 and update-uas to 1.5.0
+  - Fix issues with resetting UAS configuration to factory settings
+  - Fix missing `awk` in the basic end-user UAI image
 - Update cray-drydock 1.12.2 - adding kyverno namespace
 - Update trustedcerts-operator to 0.6.0 to use latest alpine 3 image (CASMPET-5485)
 - Istio is updated to 1.9.9, OPA envoy plugin to 0.26.0-envoy-6, kiali to 1.33.1 (CASMPET-5303, CASMPET-5359)
